@@ -1,7 +1,6 @@
 import { ChildProcess, spawn } from "child_process";
 import { join } from "path";
 import Serverless from "serverless";
-// import { IStacksMap, Stack } from "../types/additional-stack";
 import { ServerlessPluginCommand } from "../types/serverless-plugin-command";
 import { ElasticMQLaunchOptions, ElasticMQConfig } from "../types/elasticMQ";
 
@@ -13,8 +12,6 @@ const pause = async (duration: number) =>
 class ServerlessOfflineElasticMqPlugin {
   public readonly commands: Record<string, ServerlessPluginCommand>;
   public readonly hooks: Record<string, () => Promise<any>>;
-  // private additionalStacksMap: IStacksMap;
-  // private defaultStack: Stack;
   private elasticMqConfig: ElasticMQConfig;
   private mqInstances: Record<string, ChildProcess> = {};
 
@@ -22,13 +19,6 @@ class ServerlessOfflineElasticMqPlugin {
     this.commands = {};
 
     this.elasticMqConfig = this.serverless.service?.custom?.elasticmq || {};
-
-    // this.additionalStacksMap =
-    //   this.serverless.service?.custom?.additionalStacks || {};
-
-    // this.defaultStack = (((this.serverless.service || {}) as unknown) as {
-    //   resources: any;
-    // }).resources;
 
     this.hooks = {
       "before:offline:start:end": this.stopElasticMq,
@@ -101,7 +91,7 @@ class ServerlessOfflineElasticMqPlugin {
   };
 
   private startElasticMq = async () => {
-    if (this.elasticMqConfig.start.noStart || !this.shouldExecute) {
+    if (this.elasticMqConfig.start.noStart || !this.shouldExecute()) {
       this.serverless.cli.log(
         "ElasticMq Offline - [noStart] options is true. Will not start.",
       );
