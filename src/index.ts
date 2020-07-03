@@ -109,10 +109,10 @@ class ServerlessOfflineElasticMqPlugin {
     });
 
     this.serverless.cli.log(
-      `ElasticMq Offline - Started, visit: http://localhost:${port}/shell`,
+      `ElasticMq Offline - Started, visit: http://localhost:${port}`,
     );
 
-    await Promise.resolve(pause(10000));
+    await Promise.resolve(pause(1000));
   };
 
   private stopElasticMq = async () => {
