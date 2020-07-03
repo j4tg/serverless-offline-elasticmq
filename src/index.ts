@@ -1,13 +1,13 @@
 import { ChildProcess, spawn } from "child_process";
 import { join } from "path";
 import Serverless from "serverless";
+import { promises as fs } from "fs";
 import { ServerlessPluginCommand } from "../types/serverless-plugin-command";
 import { ElasticMQLaunchOptions, ElasticMQConfig } from "../types/elasticMQ";
+import internal from "stream";
+import { chunksToLinesAsync } from "@rauschma/stringio";
 
 const MQ_LOCAL_PATH = join(__dirname, "../bin");
-
-const pause = async (duration: number) =>
-  new Promise((r) => setTimeout(r, duration));
 
 class ServerlessOfflineElasticMqPlugin {
   public readonly commands: Record<string, ServerlessPluginCommand>;
@@ -34,19 +34,65 @@ class ServerlessOfflineElasticMqPlugin {
 
     const args = [];
 
-    args.push("-jar", "elasticmq-server-0.15.7.jar");
+    const confFile = `
+    include classpath("application.conf")
+
+// What is the outside visible address of this ElasticMQ node
+// Used to create the queue URL (may be different from bind address!)
+node-address {
+    protocol = http
+    host = localhost
+    port = ${port}
+    context-path = ""
+}
+
+rest-sqs {
+    enabled = true
+    bind-port = ${port}
+    bind-hostname = "0.0.0.0"
+    // Possible values: relaxed, strict
+    sqs-limits = strict
+}
+
+// Should the node-address be generated from the bind port/hostname
+// Set this to true e.g. when assigning port automatically by using port 0.
+generate-node-address = false
+
+queues {
+    // See next section
+}
+
+// Region and accountId which will be included in resource ids
+aws {
+    region = us-west-2
+    accountId = 000000000000
+}
+`;
+    await fs.writeFile(`${MQ_LOCAL_PATH}/custom.conf`, confFile);
+
+    args.push(
+      "-jar",
+      "-Dconfig.file=custom.conf",
+      "elasticmq-server-0.15.7.jar",
+    );
 
     const proc = spawn("java", args, {
       cwd: MQ_LOCAL_PATH,
       env: process.env,
-      stdio: ["pipe", "pipe", process.stderr],
     });
 
-    if (proc.pid == null) {
-      throw new Error("Unable to start the ElasticMq Local process");
+    const startupLog: string[] = [];
+    const started = await this.waitForStart(proc.stdout, startupLog);
+
+    if (proc.pid == null || !started) {
+      throw new Error("Unable to start the Pact Local process");
     }
+    proc.stdout.on("data", (data) => {
+      this.serverless.cli.log(`ElasticMq Offline: ${data.toString()}`);
+    });
 
     proc.on("error", (error) => {
+      this.serverless.cli.log(`ElasticMq Offline error: ${error.toString()}`);
       throw error;
     });
 
@@ -66,7 +112,22 @@ class ServerlessOfflineElasticMqPlugin {
       });
     });
 
-    return { proc, port };
+    return { proc, port, startupLog };
+  };
+
+  private waitForStart = async (
+    readable: internal.Readable,
+    startupLog: string[],
+  ) => {
+    let started = false;
+    for await (const line of chunksToLinesAsync(readable)) {
+      startupLog.push(line);
+      this.serverless.cli.log(line);
+      if (line.includes("ElasticMQ server (0.15.7) started")) {
+        return (started = true);
+      }
+    }
+    return started;
   };
 
   private killElasticMqProcess = (options: ElasticMQLaunchOptions) => {
@@ -102,17 +163,11 @@ class ServerlessOfflineElasticMqPlugin {
       this.elasticMqConfig.start,
     );
 
-    proc.on("close", (code) => {
-      this.serverless.cli.log(
-        `ElasticMq Offline - Failed to start with code ${code}`,
-      );
-    });
-
     this.serverless.cli.log(
-      `ElasticMq Offline - Started, visit: http://localhost:${port}`,
+      `ElasticMq Offline - Started, curl http://0.0.0.0:${port} -d {}`,
     );
 
-    await Promise.resolve(pause(2000));
+    await Promise.resolve(proc.pid);
   };
 
   private stopElasticMq = async () => {
