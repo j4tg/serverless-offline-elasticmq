@@ -112,7 +112,7 @@ class ServerlessOfflineElasticMqPlugin {
       `ElasticMq Offline - Started, visit: http://localhost:${port}`,
     );
 
-    await Promise.resolve(pause(1000));
+    await Promise.resolve(pause(2000));
   };
 
   private stopElasticMq = async () => {
