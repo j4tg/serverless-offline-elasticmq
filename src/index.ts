@@ -23,6 +23,7 @@ class ServerlessOfflineElasticMqPlugin {
     this.hooks = {
       "before:offline:start:end": this.stopElasticMq,
       "before:offline:start": this.startElasticMq,
+      "before:offline:start:init": this.startElasticMq,
     };
   }
 

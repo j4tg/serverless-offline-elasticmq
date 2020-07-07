@@ -10,6 +10,7 @@ describe("Serverless Plugin DynamoDB Offline", () => {
     expect(plugin.hooks).toEqual({
       "before:offline:start:end": expect.any(Function),
       "before:offline:start": expect.any(Function),
+      "before:offline:start:init": expect.any(Function),
     });
   });
 });
